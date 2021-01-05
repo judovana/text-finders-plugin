@@ -30,6 +30,7 @@ import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -60,8 +61,8 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
     private final List<TextFinderModel> additionalTextFinders = new ArrayList<>();;
 
     @DataBoundConstructor
-    public TextFinderPublisher(String regexp) {
-        this.primaryTextFinder = new TextFinderModel(regexp);
+    public TextFinderPublisher(String regexp, String buildId) {
+        this.primaryTextFinder = new TextFinderModel(regexp, buildId);
         // Attempt to compile regular expression
         try {
             Pattern.compile(regexp);
@@ -83,12 +84,13 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
     private TextFinderPublisher(
             String fileSet,
             String regexp,
+            String buildId,
             boolean succeedIfFound,
             boolean unstableIfFound,
             boolean notBuiltIfFound,
             boolean alsoCheckConsoleOutput,
             List<TextFinderModel> additionalTextFinders) {
-        this.primaryTextFinder = new TextFinderModel(regexp);
+        this.primaryTextFinder = new TextFinderModel(regexp, buildId);
         this.primaryTextFinder.setFileSet(Util.fixEmpty(fileSet != null ? fileSet.trim() : ""));
         this.primaryTextFinder.setSucceedIfFound(succeedIfFound);
         this.primaryTextFinder.setUnstableIfFound(unstableIfFound);
@@ -152,13 +154,18 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             throws IOException, InterruptedException {
         try {
             PrintStream logger = listener.getLogger();
-            boolean foundText = false;
+            FoundAndBuildId foundText = new FoundAndBuildId(false, null);
 
             if (textFinder.isAlsoCheckConsoleOutput()) {
                 // Do not mention the pattern we are looking for to avoid false positives
                 logger.println("[Text Finder] Scanning console output...");
-                foundText |=
-                        checkConsole(run, compilePattern(logger, textFinder.getRegexp()), logger);
+                FoundAndBuildId freshFound =
+                        checkConsole(
+                                run,
+                                compilePattern(logger, textFinder.getRegexp()),
+                                compileOptionalPattern(logger, textFinder.getBuildId()),
+                                logger);
+                foundText = new FoundAndBuildId(foundText, freshFound);
                 logger.println(
                         "[Text Finder] Finished looking for pattern "
                                 + "'"
@@ -179,13 +186,19 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                 + "'"
                                 + textFinder.getFileSet()
                                 + "'");
-                foundText |=
+                FoundAndBuildId freshFound =
                         workspace.act(
                                 new FileChecker(
-                                        ros, textFinder.getFileSet(), textFinder.getRegexp()));
+                                        ros,
+                                        textFinder.getFileSet(),
+                                        textFinder.getRegexp(),
+                                        textFinder.getBuildId()));
+                foundText = new FoundAndBuildId(foundText, freshFound);
             }
-
-            if (foundText != textFinder.isSucceedIfFound()) {
+            if (foundText.futureBuildId != null) {
+                run.setDisplayName(foundText.futureBuildId);
+            }
+            if (foundText.patternFound != textFinder.isSucceedIfFound()) {
                 final Result finalResult;
                 if (textFinder.isNotBuiltIfFound()) {
                     finalResult = Result.NOT_BUILT;
@@ -200,6 +213,25 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         }
     }
 
+    private static final class FoundAndBuildId {
+        public final boolean patternFound;
+        public final String
+                futureBuildId; // this can not be optional, as it can go from slave to master
+
+        public FoundAndBuildId(boolean patternFound, String futureBuildId) {
+            this.patternFound = patternFound;
+            this.futureBuildId = futureBuildId;
+        }
+
+        public FoundAndBuildId(FoundAndBuildId old, FoundAndBuildId fresh) {
+            this(old.patternFound | fresh.patternFound, overwriteByNonNull(old, fresh));
+        }
+
+        private static String overwriteByNonNull(FoundAndBuildId old, FoundAndBuildId fresh) {
+            return fresh.futureBuildId != null ? fresh.futureBuildId : old.futureBuildId;
+        }
+    }
+
     /**
      * Search the given regexp pattern.
      *
@@ -207,19 +239,38 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
      *     is necessary when we are scanning the console output, because otherwise we'll loop
      *     forever.
      */
-    private static boolean checkPattern(
-            Reader r,
-            Pattern pattern,
-            PrintStream logger,
-            String header,
-            boolean abortAfterFirstHit)
+    private static FoundAndBuildId checkPattern(
+            final Reader r,
+            final Pattern pattern,
+            final Optional<Pattern> buildId,
+            final PrintStream logger,
+            final String header,
+            final boolean abortAfterFirstHit)
             throws IOException {
         boolean logFilename = true;
         boolean foundText = false;
+        boolean foundBuildId = false;
+        String buildIdResult = null;
+        Pattern enchancedBuildId;
+        if (buildId.isPresent()) {
+            enchancedBuildId = Pattern.compile(buildId.get().pattern() + ".*");
+        } else {
+            enchancedBuildId = null;
+        }
         try (BufferedReader reader = new BufferedReader(r)) {
             // Assume default encoding and text files
             String line;
             while ((line = reader.readLine()) != null) {
+                if (buildId.isPresent() && !foundBuildId) {
+                    Matcher matcher = enchancedBuildId.matcher(line);
+                    if (matcher.find()) {
+                        logger.println("[Text Finder] Found future buildId line: '" + line + "'");
+                        buildIdResult = line.replaceAll(buildId.get().pattern(), "");
+                        logger.println(
+                                "[Text Finder] Leading to buildId of: '" + buildIdResult + "'");
+                        foundBuildId = true;
+                    }
+                }
                 Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
                     if (logFilename) { // first occurrence
@@ -231,35 +282,39 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                     logger.println(line);
                     foundText = true;
                     if (abortAfterFirstHit) {
-                        return true;
+                        return new FoundAndBuildId(true, buildIdResult);
                     }
                 }
             }
         }
-        return foundText;
+        return new FoundAndBuildId(foundText, buildIdResult);
     }
 
-    private static boolean checkConsole(Run<?, ?> build, Pattern pattern, PrintStream logger) {
+    private static FoundAndBuildId checkConsole(
+            Run<?, ?> build, Pattern pattern, Optional<Pattern> buildId, PrintStream logger) {
         try (Reader r = build.getLogReader()) {
-            return checkPattern(r, pattern, logger, null, true);
+            return checkPattern(r, pattern, buildId, logger, null, true);
         } catch (IOException e) {
             logger.println("[Text Finder] Error reading console output -- ignoring");
             Functions.printStackTrace(e, logger);
+            return new FoundAndBuildId(false, null);
         }
-
-        return false;
     }
 
-    private static boolean checkFile(File f, Pattern pattern, PrintStream logger, Charset charset) {
+    private static FoundAndBuildId checkFile(
+            File f,
+            Pattern pattern,
+            Optional<Pattern> buildId,
+            PrintStream logger,
+            Charset charset) {
         try (InputStream is = new FileInputStream(f);
                 Reader r = new InputStreamReader(is, charset)) {
-            return checkPattern(r, pattern, logger, f + ":", false);
+            return checkPattern(r, pattern, buildId, logger, f + ":", false);
         } catch (IOException e) {
             logger.println("[Text Finder] Error reading file '" + f + "' -- ignoring");
             Functions.printStackTrace(e, logger);
+            return new FoundAndBuildId(false, null);
         }
-
-        return false;
     }
 
     private static Pattern compilePattern(PrintStream logger, String regexp) {
@@ -271,6 +326,20 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             throw new AbortException();
         }
         return pattern;
+    }
+
+    private static Optional<Pattern> compileOptionalPattern(PrintStream logger, String regexp) {
+        if (regexp == null || regexp.trim().isEmpty()) {
+            return Optional.empty();
+        }
+        Pattern pattern;
+        try {
+            pattern = Pattern.compile(regexp);
+        } catch (PatternSyntaxException e) {
+            logger.println("[Text Finder] Unable to compile regular expression '" + regexp + "'");
+            throw new AbortException();
+        }
+        return Optional.of(pattern);
     }
 
     @SuppressWarnings("unused")
@@ -286,6 +355,11 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
     @SuppressWarnings("unused")
     public String getRegexp() {
         return this.primaryTextFinder.getRegexp();
+    }
+
+    @SuppressWarnings("unused")
+    public String getBuildId() {
+        return this.primaryTextFinder.getBuildId();
     }
 
     @SuppressWarnings("unused")
@@ -359,20 +433,22 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         }
     }
 
-    private static class FileChecker extends MasterToSlaveFileCallable<Boolean> {
+    private static class FileChecker extends MasterToSlaveFileCallable<FoundAndBuildId> {
 
         private final RemoteOutputStream ros;
         private final String fileSet;
         private final String regexp;
+        private final String buildId;
 
-        public FileChecker(RemoteOutputStream ros, String fileSet, String regexp) {
+        public FileChecker(RemoteOutputStream ros, String fileSet, String regexp, String buildId) {
             this.ros = ros;
             this.fileSet = fileSet;
             this.regexp = regexp;
+            this.buildId = buildId;
         }
 
         @Override
-        public Boolean invoke(File ws, VirtualChannel channel) throws IOException {
+        public FoundAndBuildId invoke(File ws, VirtualChannel channel) throws IOException {
             PrintStream logger = new PrintStream(ros, true, Charset.defaultCharset().toString());
 
             // Collect list of files for searching
@@ -391,8 +467,9 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             }
 
             Pattern pattern = compilePattern(logger, regexp);
+            Optional<Pattern> buildIdPattern = compileOptionalPattern(logger, buildId);
 
-            boolean foundText = false;
+            FoundAndBuildId foundText = new FoundAndBuildId(false, null);
 
             for (String file : files) {
                 File f = new File(ws, file);
@@ -407,7 +484,9 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                     continue;
                 }
 
-                foundText |= checkFile(f, pattern, logger, Charset.defaultCharset());
+                FoundAndBuildId freshFound =
+                        checkFile(f, pattern, buildIdPattern, logger, Charset.defaultCharset());
+                foundText = new FoundAndBuildId(foundText, freshFound);
             }
 
             return foundText;
