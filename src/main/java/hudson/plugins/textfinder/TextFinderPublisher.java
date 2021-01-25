@@ -213,7 +213,8 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         }
     }
 
-    private static final class FoundAndBuildId {
+    private static final class FoundAndBuildId implements Serializable {
+        private static final long serialVersionUID = 1L;
         public final boolean patternFound;
         public final String
                 futureBuildId; // this can not be optional, as it can go from slave to master
