@@ -27,6 +27,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.Reader;
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
@@ -198,19 +199,65 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             if (foundText.futureBuildId != null) {
                 run.setDisplayName(foundText.futureBuildId);
             }
-            if (foundText.patternFound != textFinder.isSucceedIfFound()) {
-                final Result finalResult;
-                if (textFinder.isNotBuiltIfFound()) {
-                    finalResult = Result.NOT_BUILT;
-                } else {
-                    finalResult = textFinder.isUnstableIfFound() ? Result.UNSTABLE : Result.FAILURE;
+            if (foundText.patternFound) {
+                try {
+                    final Result finalResult;
+                    if (textFinder.isNotBuiltIfFound()) {
+                        finalResult = Result.NOT_BUILT;
+                    } else if (textFinder.isUnstableIfFound()) {
+                        finalResult = Result.UNSTABLE;
+                    } else if (isSucceedIfFound()) {
+                        finalResult = Result.SUCCESS;
+                        changeField(Result.SUCCESS, "ordinal", 10000, listener);
+                    } else {
+                        finalResult = Result.FAILURE;
+                    }
+                    run.setResult(finalResult);
+                } finally {
+                    if (Result.SUCCESS.ordinal != 0) {
+                        changeField(Result.SUCCESS, "ordinal", 0, listener);
+                    }
                 }
-                run.setResult(finalResult);
             }
         } catch (AbortException e) {
             // files presented, but no test file found.
             run.setResult(Result.UNSTABLE);
         }
+    }
+
+    public static void changeField(
+            Object source, String name, Object value, TaskListener listener) {
+        try {
+            changeFieldImpl(source, name, value, listener);
+        } catch (Exception ex) {
+            listener.getLogger().println(ex.toString());
+        }
+    }
+
+    public static void changeFieldImpl(
+            Object source, String name, Object value, TaskListener listener)
+            throws IllegalAccessException, NoSuchFieldException {
+        Field field = source.getClass().getDeclaredField(name);
+        listener.getLogger()
+                .println(
+                        source.getClass()
+                                + " of "
+                                + source.toString()
+                                + ": "
+                                + name
+                                + " = "
+                                + field.get(source));
+        field.setAccessible(true);
+        field.set(source, value);
+        listener.getLogger()
+                .println(
+                        source.getClass()
+                                + " of "
+                                + source.toString()
+                                + ": "
+                                + name
+                                + " = "
+                                + field.get(source));
     }
 
     private static final class FoundAndBuildId implements Serializable {
