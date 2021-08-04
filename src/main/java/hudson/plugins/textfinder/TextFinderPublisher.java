@@ -200,24 +200,18 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                 run.setDisplayName(foundText.futureBuildId);
             }
             if (foundText.patternFound) {
-                try {
-                    final Result finalResult;
-                    if (textFinder.isNotBuiltIfFound()) {
-                        finalResult = Result.NOT_BUILT;
-                    } else if (textFinder.isUnstableIfFound()) {
-                        finalResult = Result.UNSTABLE;
-                    } else if (isSucceedIfFound()) {
-                        finalResult = Result.SUCCESS;
-                        changeField(Result.SUCCESS, "ordinal", 10000, listener);
-                    } else {
-                        finalResult = Result.FAILURE;
-                    }
-                    run.setResult(finalResult);
-                } finally {
-                    if (Result.SUCCESS.ordinal != 0) {
-                        changeField(Result.SUCCESS, "ordinal", 0, listener);
-                    }
+                final Result finalResult;
+                if (textFinder.isNotBuiltIfFound()) {
+                    finalResult = Result.NOT_BUILT;
+                } else if (textFinder.isUnstableIfFound()) {
+                    finalResult = Result.UNSTABLE;
+                } else if (isSucceedIfFound()) {
+                    finalResult = Result.SUCCESS;
+                } else {
+                    finalResult = Result.FAILURE;
                 }
+                // avoiding setResult to be able to downgrade to success also from worse states
+                changeField(run, "result", finalResult, listener);
             }
         } catch (AbortException e) {
             // files presented, but no test file found.
@@ -225,8 +219,11 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         }
     }
 
-    public static void changeField(
-            Object source, String name, Object value, TaskListener listener) {
+    private static void changeField(
+            final Object source,
+            final String name,
+            final Object value,
+            final TaskListener listener) {
         try {
             changeFieldImpl(source, name, value, listener);
         } catch (Exception ex) {
@@ -234,10 +231,18 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         }
     }
 
-    public static void changeFieldImpl(
-            Object source, String name, Object value, TaskListener listener)
+    private static void changeFieldImpl(
+            final Object source, final String name, final Object value, final TaskListener listener)
             throws IllegalAccessException, NoSuchFieldException {
-        Field field = source.getClass().getDeclaredField(name);
+        Field field = findField(source.getClass(), name);
+        if (field == null) {
+            throw new NoSuchFieldException(
+                    name
+                            + " not fund in "
+                            + source.getClass().toString()
+                            + " not in supperclasses");
+        }
+        field.setAccessible(true);
         listener.getLogger()
                 .println(
                         source.getClass()
@@ -247,7 +252,6 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                 + name
                                 + " = "
                                 + field.get(source));
-        field.setAccessible(true);
         field.set(source, value);
         listener.getLogger()
                 .println(
@@ -258,6 +262,18 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                 + name
                                 + " = "
                                 + field.get(source));
+    }
+
+    private static Field findField(final Class clazz, final String name) {
+        try {
+            return clazz.getDeclaredField(name);
+        } catch (NoSuchFieldException ex) {
+            if (clazz.getSuperclass() != null) {
+                return findField((clazz.getSuperclass()), name);
+            } else {
+                return null;
+            }
+        }
     }
 
     private static final class FoundAndBuildId implements Serializable {
