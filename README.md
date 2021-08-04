@@ -1,4 +1,9 @@
-# Text Finder
+# Text FinderS plugin
+
+Due to inability to merge our PRs to original  Text-Finder-plugins, we crated this fork, with following features:
+ - ability to have several textfinders
+ - ability to change display name
+ - ability to downgrade to success
 
 [![Build Status](https://ci.jenkins.io/buildStatus/icon?job=Plugins/text-finder-plugin/master)](https://ci.jenkins.io/job/Plugins/job/text-finder-plugin/job/master/)
 [![Jenkins Plugin](https://img.shields.io/jenkins/plugin/v/text-finder.svg)](https://plugins.jenkins.io/text-finder)
