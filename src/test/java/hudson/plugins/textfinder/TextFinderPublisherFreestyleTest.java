@@ -50,6 +50,7 @@ public class TextFinderPublisherFreestyleTest {
                         + "' in the console output",
                 build);
         TestUtils.assertConsoleContainsMatch(ECHO_UNIQUE_TEXT, rule, build, true);
+        rule.assertBuildStatus(Result.SUCCESS, build);
     }
 
     @Test
