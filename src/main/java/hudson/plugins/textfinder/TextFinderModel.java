@@ -16,6 +16,7 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
 
     private String fileSet;
     private final String regexp;
+    private final String buildId;
     private boolean succeedIfFound;
     private boolean unstableIfFound;
     private boolean notBuiltIfFound;
@@ -23,11 +24,15 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
     private boolean alsoCheckConsoleOutput;
 
     @DataBoundConstructor
-    public TextFinderModel(String regexp) {
+    public TextFinderModel(String regexp, String buildId) {
         this.regexp = regexp;
+        this.buildId = buildId;
         // Attempt to compile regular expression
         try {
             Pattern.compile(regexp);
+            if (buildId != null && !buildId.trim().isEmpty()) {
+                Pattern.compile(buildId);
+            }
         } catch (PatternSyntaxException e) {
             // falls through
         }
@@ -70,12 +75,14 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
     private TextFinderModel(
             String fileSet,
             String regexp,
+            String buildId,
             boolean succeedIfFound,
             boolean unstableIfFound,
             boolean alsoCheckConsoleOutput,
             boolean notBuiltIfFound) {
         this.fileSet = fileSet != null ? Util.fixEmpty(fileSet.trim()) : null;
         this.regexp = regexp;
+        this.buildId = buildId;
         this.succeedIfFound = succeedIfFound;
         this.unstableIfFound = unstableIfFound;
         this.alsoCheckConsoleOutput = alsoCheckConsoleOutput;
@@ -95,6 +102,10 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
 
     public String getRegexp() {
         return regexp;
+    }
+
+    public String getBuildId() {
+        return buildId;
     }
 
     public boolean isSucceedIfFound() {
