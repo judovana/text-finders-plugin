@@ -1,4 +1,4 @@
-# Text FinderS plugin
+# Text FinderS Plugin
 
 Due to inability to merge our PRs to original  Text-Finder-plugins, we crated this fork, with following features:
  - ability to have several textfinders
