@@ -200,18 +200,16 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                 run.setDisplayName(foundText.futureBuildId);
             }
             if (foundText.patternFound) {
-                final Result finalResult;
                 if (textFinder.isNotBuiltIfFound()) {
-                    finalResult = Result.NOT_BUILT;
+                    run.setResult(Result.NOT_BUILT);
                 } else if (textFinder.isUnstableIfFound()) {
-                    finalResult = Result.UNSTABLE;
+                    run.setResult(Result.UNSTABLE);
                 } else if (isSucceedIfFound()) {
-                    finalResult = Result.SUCCESS;
+                    // avoiding setResult to be able to downgrade to success also from worse states
+                    changeField(run, "result", Result.SUCCESS, listener);
                 } else {
-                    finalResult = Result.FAILURE;
+                    run.setResult(Result.FAILURE);
                 }
-                // avoiding setResult to be able to downgrade to success also from worse states
-                changeField(run, "result", finalResult, listener);
             }
         } catch (AbortException e) {
             // files presented, but no test file found.
