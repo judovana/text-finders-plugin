@@ -13,6 +13,7 @@ import org.jvnet.hudson.test.JenkinsRule;
 public class TextFinderPublisherPipelineTest {
 
     private static final String UNIQUE_TEXT = "foobar";
+    private static final String UNIQUE_TEXT_APPEND = " appended";
     private static final String SUPER_ID = "superId";
     private static final String SUPER_ID_KEY = "future name: ";
     private static final String SUPER_ID_LINE = SUPER_ID_KEY + SUPER_ID;
@@ -294,6 +295,61 @@ public class TextFinderPublisherPipelineTest {
                         + UNIQUE_TEXT
                         + "' in the console output",
                 build);
+        TestUtils.assertConsoleContainsMatch(ECHO_UNIQUE_TEXT, rule, build, true);
+        Assert.assertEquals(SUPER_ID, build.getDisplayName());
+        rule.assertBuildStatus(Result.UNSTABLE, build);
+    }
+
+    @Test
+    public void unstableIfFoundInConsoleWithFutureDescription() throws Exception {
+        unstableIfFoundInConsoleWithFutureDescriptionImpl(true);
+    }
+
+    @Test
+    public void unstableIfFoundInConsoleWithoutFutureDescription() throws Exception {
+        unstableIfFoundInConsoleWithFutureDescriptionImpl(false);
+    }
+
+    public void unstableIfFoundInConsoleWithFutureDescriptionImpl(boolean setDesc)
+            throws Exception {
+        WorkflowJob project = rule.createProject(WorkflowJob.class);
+        project.setDefinition(
+                new CpsFlowDefinition(
+                        "node {\n"
+                                + "  isUnix() ? sh('"
+                                + ECHO_ID
+                                + ";"
+                                + ECHO_UNIQUE_TEXT
+                                + UNIQUE_TEXT_APPEND
+                                + ";"
+                                + "') : bat(\"prompt \\$G\\r\\n"
+                                + "echo notTestedOnWidows"
+                                + "\")\n"
+                                + "  findText regexp: '"
+                                + UNIQUE_TEXT
+                                + "', buildId: '"
+                                + "^"
+                                + SUPER_ID_KEY
+                                + "', setDescription: "
+                                + setDesc
+                                + ", unstableIfFound: true, alsoCheckConsoleOutput: true\n"
+                                + "}\n",
+                        true));
+        WorkflowRun build = project.scheduleBuild2(0).get();
+        rule.waitForCompletion(build);
+        rule.assertLogContains("[Text Finder] Scanning console output...", build);
+        rule.assertLogContains(
+                "[Text Finder] Finished looking for pattern '"
+                        + UNIQUE_TEXT
+                        + "' in the console output",
+                build);
+        if (setDesc) {
+            rule.assertLogContains(
+                    "[Text Finder] will set description of: '" + UNIQUE_TEXT_APPEND + "'", build);
+        } else {
+            rule.assertLogNotContains(
+                    "[Text Finder] will set description of: '" + UNIQUE_TEXT_APPEND + "'", build);
+        }
         TestUtils.assertConsoleContainsMatch(ECHO_UNIQUE_TEXT, rule, build, true);
         Assert.assertEquals(SUPER_ID, build.getDisplayName());
         rule.assertBuildStatus(Result.UNSTABLE, build);

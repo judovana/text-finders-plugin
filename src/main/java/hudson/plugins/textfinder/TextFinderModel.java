@@ -17,7 +17,7 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
     private String fileSet;
     private final String regexp;
     private final String buildId;
-    private final boolean setDesription = true;
+    private final boolean setDescription;
     private boolean succeedIfFound;
     private boolean unstableIfFound;
     private boolean notBuiltIfFound;
@@ -25,9 +25,10 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
     private boolean alsoCheckConsoleOutput;
 
     @DataBoundConstructor
-    public TextFinderModel(String regexp, String buildId) {
+    public TextFinderModel(String regexp, String buildId, boolean setDesription) {
         this.regexp = regexp;
         this.buildId = buildId;
+        this.setDescription = setDesription;
         // Attempt to compile regular expression
         try {
             Pattern.compile(regexp);
@@ -77,6 +78,7 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
             String fileSet,
             String regexp,
             String buildId,
+            boolean setDescription,
             boolean succeedIfFound,
             boolean unstableIfFound,
             boolean alsoCheckConsoleOutput,
@@ -84,6 +86,7 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
         this.fileSet = fileSet != null ? Util.fixEmpty(fileSet.trim()) : null;
         this.regexp = regexp;
         this.buildId = buildId;
+        this.setDescription = setDescription;
         this.succeedIfFound = succeedIfFound;
         this.unstableIfFound = unstableIfFound;
         this.alsoCheckConsoleOutput = alsoCheckConsoleOutput;
@@ -109,8 +112,8 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
         return buildId;
     }
 
-    public boolean isSetDesription() {
-        return setDesription;
+    public boolean isSetDescription() {
+        return setDescription;
     }
 
     public boolean isSucceedIfFound() {

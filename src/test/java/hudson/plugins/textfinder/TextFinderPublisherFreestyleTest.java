@@ -38,7 +38,7 @@ public class TextFinderPublisherFreestyleTest {
                         ? new BatchFile("prompt $G\n" + ECHO_UNIQUE_TEXT)
                         : new Shell(ECHO_UNIQUE_TEXT);
         project.getBuildersList().add(command);
-        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null);
+        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null, true);
         textFinder.setSucceedIfFound(true);
         textFinder.setAlsoCheckConsoleOutput(true);
         project.getPublishersList().add(textFinder);
@@ -61,7 +61,7 @@ public class TextFinderPublisherFreestyleTest {
                         ? new BatchFile("prompt $G\n" + ECHO_UNIQUE_TEXT)
                         : new Shell(ECHO_UNIQUE_TEXT);
         project.getBuildersList().add(command);
-        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, "");
+        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, "", true);
         textFinder.setAlsoCheckConsoleOutput(true);
         project.getPublishersList().add(textFinder);
         FreeStyleBuild build = project.scheduleBuild2(0).get();
@@ -84,7 +84,7 @@ public class TextFinderPublisherFreestyleTest {
                         ? new BatchFile("prompt $G\n" + ECHO_UNIQUE_TEXT)
                         : new Shell(ECHO_UNIQUE_TEXT);
         project.getBuildersList().add(command);
-        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null);
+        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null, true);
         textFinder.setUnstableIfFound(true);
         textFinder.setAlsoCheckConsoleOutput(true);
         project.getPublishersList().add(textFinder);
@@ -103,7 +103,7 @@ public class TextFinderPublisherFreestyleTest {
     @Test
     public void notFoundInConsole() throws Exception {
         FreeStyleProject project = rule.createFreeStyleProject();
-        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, "");
+        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, "", true);
         textFinder.setAlsoCheckConsoleOutput(true);
         project.getPublishersList().add(textFinder);
         FreeStyleBuild build = project.scheduleBuild2(0).get();
@@ -127,18 +127,18 @@ public class TextFinderPublisherFreestyleTest {
         project.getBuildersList().add(command);
 
         List<TextFinderModel> finders = new ArrayList<>();
-        TextFinderModel t1 = new TextFinderModel(UNIQUE_TEXT, ""); // 2nd
+        TextFinderModel t1 = new TextFinderModel(UNIQUE_TEXT, "", true); // 2nd
         t1.setAlsoCheckConsoleOutput(true);
         t1.setSucceedIfFound(true);
         TextFinderModel t2 =
                 new TextFinderModel(
-                        UNIQUE_TEXT, null); // 3rd, this one must win; note that not_build is
+                        UNIQUE_TEXT, null, true); // 3rd, this one must win; note that not_build is
         // unmodificable
         t2.setAlsoCheckConsoleOutput(true);
         t2.setUnstableIfFound(true);
         finders.add(t1);
         finders.add(t2);
-        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null);
+        TextFinderPublisher textFinder = new TextFinderPublisher(UNIQUE_TEXT, null, true);
         textFinder.setAlsoCheckConsoleOutput(true);
         textFinder.setSucceedIfFound(true);
         textFinder.setAdditionalTextFinders(finders);

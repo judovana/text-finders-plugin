@@ -62,8 +62,8 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
     private final List<TextFinderModel> additionalTextFinders = new ArrayList<>();;
 
     @DataBoundConstructor
-    public TextFinderPublisher(String regexp, String buildId) {
-        this.primaryTextFinder = new TextFinderModel(regexp, buildId);
+    public TextFinderPublisher(String regexp, String buildId, boolean setDescription) {
+        this.primaryTextFinder = new TextFinderModel(regexp, buildId, setDescription);
         // Attempt to compile regular expression
         try {
             Pattern.compile(regexp);
@@ -86,12 +86,13 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             String fileSet,
             String regexp,
             String buildId,
+            boolean setDescription,
             boolean succeedIfFound,
             boolean unstableIfFound,
             boolean notBuiltIfFound,
             boolean alsoCheckConsoleOutput,
             List<TextFinderModel> additionalTextFinders) {
-        this.primaryTextFinder = new TextFinderModel(regexp, buildId);
+        this.primaryTextFinder = new TextFinderModel(regexp, buildId, setDescription);
         this.primaryTextFinder.setFileSet(Util.fixEmpty(fileSet != null ? fileSet.trim() : ""));
         this.primaryTextFinder.setSucceedIfFound(succeedIfFound);
         this.primaryTextFinder.setUnstableIfFound(unstableIfFound);
@@ -165,7 +166,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                 run,
                                 compilePattern(logger, textFinder.getRegexp()),
                                 compileOptionalPattern(logger, textFinder.getBuildId()),
-                                textFinder.isSetDesription(),
+                                textFinder.isSetDescription(),
                                 logger);
                 foundText = new FoundAndBuildId(foundText, freshFound);
                 logger.println(
@@ -195,7 +196,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                         textFinder.getFileSet(),
                                         textFinder.getRegexp(),
                                         textFinder.getBuildId(),
-                                        textFinder.isSetDesription()));
+                                        textFinder.isSetDescription()));
                 foundText = new FoundAndBuildId(foundText, freshFound);
             }
             if (foundText.futureBuildId != null) {
@@ -374,7 +375,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                     if (setDescription) {
                         descResult = line.replaceAll(".*" + pattern.pattern(), "");
                         logger.println(
-                                "[Text Finder] will set description of '" + descResult + "'");
+                                "[Text Finder] will set description of: '" + descResult + "'");
                     }
                     if (abortAfterFirstHit) {
                         return new FoundAndBuildId(true, buildIdResult, descResult);

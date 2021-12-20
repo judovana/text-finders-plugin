@@ -7,6 +7,10 @@
     <f:checkbox/>
     <label class="attach-previous">${%Also search the console output}</label>
   </f:entry>
+  <f:entry field="setDescription" title="">
+      <f:checkbox/>
+      <label class="attach-previous">${%Set the description from matched line}</label>
+    </f:entry>
   <f:entry field="regexp" title="${%Regular expression}">
     <f:textbox/>
   </f:entry>
