@@ -17,6 +17,7 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
     private String fileSet;
     private final String regexp;
     private final String buildId;
+    private final boolean setDesription = true;
     private boolean succeedIfFound;
     private boolean unstableIfFound;
     private boolean notBuiltIfFound;
@@ -106,6 +107,10 @@ public final class TextFinderModel extends AbstractDescribableImpl<TextFinderMod
 
     public String getBuildId() {
         return buildId;
+    }
+
+    public boolean isSetDesription() {
+        return setDesription;
     }
 
     public boolean isSucceedIfFound() {

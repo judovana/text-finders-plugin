@@ -155,7 +155,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             throws IOException, InterruptedException {
         try {
             PrintStream logger = listener.getLogger();
-            FoundAndBuildId foundText = new FoundAndBuildId(false, null);
+            FoundAndBuildId foundText = new FoundAndBuildId(false, null, null);
 
             if (textFinder.isAlsoCheckConsoleOutput()) {
                 // Do not mention the pattern we are looking for to avoid false positives
@@ -165,6 +165,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                 run,
                                 compilePattern(logger, textFinder.getRegexp()),
                                 compileOptionalPattern(logger, textFinder.getBuildId()),
+                                textFinder.isSetDesription(),
                                 logger);
                 foundText = new FoundAndBuildId(foundText, freshFound);
                 logger.println(
@@ -193,11 +194,15 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                                         ros,
                                         textFinder.getFileSet(),
                                         textFinder.getRegexp(),
-                                        textFinder.getBuildId()));
+                                        textFinder.getBuildId(),
+                                        textFinder.isSetDesription()));
                 foundText = new FoundAndBuildId(foundText, freshFound);
             }
             if (foundText.futureBuildId != null) {
                 run.setDisplayName(foundText.futureBuildId);
+            }
+            if (foundText.futureDescription != null) {
+                run.setDescription(prepend(run.getDescription()) + foundText.futureDescription);
             }
             if (foundText.patternFound) {
                 if (textFinder.isNotBuiltIfFound()) {
@@ -214,6 +219,14 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         } catch (AbortException e) {
             // files presented, but no test file found.
             run.setResult(Result.UNSTABLE);
+        }
+    }
+
+    private String prepend(String description) {
+        if (description == null || description.trim().isEmpty()) {
+            return "";
+        } else {
+            return description + "\n";
         }
     }
 
@@ -279,18 +292,31 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         public final boolean patternFound;
         public final String
                 futureBuildId; // this can not be optional, as it can go from slave to master
+        public final String
+                futureDescription; // this can not be optional, as it can go from slave to master
 
-        public FoundAndBuildId(boolean patternFound, String futureBuildId) {
+        public FoundAndBuildId(
+                boolean patternFound, String futureBuildId, String futureDescription) {
             this.patternFound = patternFound;
             this.futureBuildId = futureBuildId;
+            this.futureDescription = futureDescription;
         }
 
         public FoundAndBuildId(FoundAndBuildId old, FoundAndBuildId fresh) {
-            this(old.patternFound | fresh.patternFound, overwriteByNonNull(old, fresh));
+            this(
+                    old.patternFound | fresh.patternFound,
+                    overwriteByNonNullId(old, fresh),
+                    overwriteByNonNullDesc(old, fresh));
         }
 
-        private static String overwriteByNonNull(FoundAndBuildId old, FoundAndBuildId fresh) {
+        private static String overwriteByNonNullId(FoundAndBuildId old, FoundAndBuildId fresh) {
             return fresh.futureBuildId != null ? fresh.futureBuildId : old.futureBuildId;
+        }
+
+        private static String overwriteByNonNullDesc(FoundAndBuildId old, FoundAndBuildId fresh) {
+            return fresh.futureDescription != null
+                    ? fresh.futureDescription
+                    : old.futureDescription;
         }
     }
 
@@ -305,6 +331,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             final Reader r,
             final Pattern pattern,
             final Optional<Pattern> buildId,
+            final boolean setDescription,
             final PrintStream logger,
             final String header,
             final boolean abortAfterFirstHit)
@@ -313,6 +340,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         boolean foundText = false;
         boolean foundBuildId = false;
         String buildIdResult = null;
+        String descResult = null;
         Pattern enchancedBuildId;
         if (buildId.isPresent()) {
             enchancedBuildId = Pattern.compile(buildId.get().pattern() + ".*");
@@ -343,23 +371,32 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                     }
                     logger.println(line);
                     foundText = true;
+                    if (setDescription) {
+                        descResult = line.replaceAll(".*" + pattern.pattern(), "");
+                        logger.println(
+                                "[Text Finder] will set description of '" + descResult + "'");
+                    }
                     if (abortAfterFirstHit) {
-                        return new FoundAndBuildId(true, buildIdResult);
+                        return new FoundAndBuildId(true, buildIdResult, descResult);
                     }
                 }
             }
         }
-        return new FoundAndBuildId(foundText, buildIdResult);
+        return new FoundAndBuildId(foundText, buildIdResult, descResult);
     }
 
     private static FoundAndBuildId checkConsole(
-            Run<?, ?> build, Pattern pattern, Optional<Pattern> buildId, PrintStream logger) {
+            Run<?, ?> build,
+            Pattern pattern,
+            Optional<Pattern> buildId,
+            boolean setDescription,
+            PrintStream logger) {
         try (Reader r = build.getLogReader()) {
-            return checkPattern(r, pattern, buildId, logger, null, true);
+            return checkPattern(r, pattern, buildId, setDescription, logger, null, true);
         } catch (IOException e) {
             logger.println("[Text Finder] Error reading console output -- ignoring");
             Functions.printStackTrace(e, logger);
-            return new FoundAndBuildId(false, null);
+            return new FoundAndBuildId(false, null, null);
         }
     }
 
@@ -367,15 +404,16 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             File f,
             Pattern pattern,
             Optional<Pattern> buildId,
+            boolean setDescription,
             PrintStream logger,
             Charset charset) {
         try (InputStream is = new FileInputStream(f);
                 Reader r = new InputStreamReader(is, charset)) {
-            return checkPattern(r, pattern, buildId, logger, f + ":", false);
+            return checkPattern(r, pattern, buildId, setDescription, logger, f + ":", false);
         } catch (IOException e) {
             logger.println("[Text Finder] Error reading file '" + f + "' -- ignoring");
             Functions.printStackTrace(e, logger);
-            return new FoundAndBuildId(false, null);
+            return new FoundAndBuildId(false, null, null);
         }
     }
 
@@ -501,12 +539,19 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
         private final String fileSet;
         private final String regexp;
         private final String buildId;
+        private final boolean setDescription;
 
-        public FileChecker(RemoteOutputStream ros, String fileSet, String regexp, String buildId) {
+        public FileChecker(
+                RemoteOutputStream ros,
+                String fileSet,
+                String regexp,
+                String buildId,
+                boolean setDescription) {
             this.ros = ros;
             this.fileSet = fileSet;
             this.regexp = regexp;
             this.buildId = buildId;
+            this.setDescription = setDescription;
         }
 
         @Override
@@ -531,7 +576,7 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
             Pattern pattern = compilePattern(logger, regexp);
             Optional<Pattern> buildIdPattern = compileOptionalPattern(logger, buildId);
 
-            FoundAndBuildId foundText = new FoundAndBuildId(false, null);
+            FoundAndBuildId foundText = new FoundAndBuildId(false, null, null);
 
             for (String file : files) {
                 File f = new File(ws, file);
@@ -547,7 +592,13 @@ public class TextFinderPublisher extends Recorder implements Serializable, Simpl
                 }
 
                 FoundAndBuildId freshFound =
-                        checkFile(f, pattern, buildIdPattern, logger, Charset.defaultCharset());
+                        checkFile(
+                                f,
+                                pattern,
+                                buildIdPattern,
+                                setDescription,
+                                logger,
+                                Charset.defaultCharset());
                 foundText = new FoundAndBuildId(foundText, freshFound);
             }
 
