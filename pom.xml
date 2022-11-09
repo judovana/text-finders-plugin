@@ -21,7 +21,8 @@
      </license>
    </licenses>
     <properties>
-        <revision>1.13</revision>
+        <!-- This version simbolise our fork, and ensure that plgin wil lnever get updated. 1.13 is latest usptreamed we synced with-->
+        <revision>100.100.1.13</revision>
         <changelist>-SNAPSHOT</changelist>
         <jenkins.version>2.249.1</jenkins.version>
     </properties>
